@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 辩论平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .message-pro { background-color: #dbeafe; border-left: 4px solid #3b82f6; }
+        .message-con { background-color: #fee2e2; border-left: 4px solid #ef4444; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message-content {
+            max-width: none;
+            word-wrap: break-word;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div x-data="debateApp()" x-init="init()" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white shadow-lg">
+            <div class="container mx-auto px-4 py-4">
+                <h1 class="text-2xl font-bold">AI 辩论平台</h1>
+                <p class="text-blue-200 text-sm mt-1">基于 LangChain 的智能辩论系统</p>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="bg-white shadow">
+            <div class="container mx-auto px-4">
+                <div class="flex space-x-4">
+                    <button @click="currentTab = 'debates'"
+                            :class="currentTab === 'debates' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 px-4 border-b-2 font-medium transition">
+                        辩论历史
+                    </button>
+                    <button @click="currentTab = 'topics'"
+                            :class="currentTab === 'topics' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 px-4 border-b-2 font-medium transition">
+                        辩题管理
+                    </button>
+                    <button @click="currentTab = 'configs'"
+                            :class="currentTab === 'configs' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 px-4 border-b-2 font-medium transition">
+                        LLM 配置
+                    </button>
+                    <button @click="currentTab = 'new'"
+                            :class="currentTab === 'new' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 px-4 border-b-2 font-medium transition">
+                        开始辩论
+                    </button>
+                    <button @click="currentTab = 'live'" x-show="isLiveView"
+                            :class="currentTab === 'live' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                            class="py-3 px-4 border-b-2 font-medium transition flex items-center">
+                        <span class="w-2 h-2 bg-red-600 rounded-full mr-2 animate-pulse"></span>
+                        直播中
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="container mx-auto px-4 py-6">
+            <!-- Debates Tab -->
+            <div x-show="currentTab === 'debates'" x-cloak>
+                <h2 class="text-xl font-semibold mb-4">辩论历史</h2>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">辩题</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">正方</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">反方</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">胜方</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">时间</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="debate in debates" :key="debate.id">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 text-sm text-gray-500" x-text="debate.id"></td>
+                                    <td class="px-6 py-4 text-sm text-gray-900" x-text="debate.topic_title"></td>
+                                    <td class="px-6 py-4 text-sm text-gray-500" x-text="debate.pro_config_name"></td>
+                                    <td class="px-6 py-4 text-sm text-gray-500" x-text="debate.con_config_name"></td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2 py-1 text-xs rounded-full"
+                                              :class="{
+                                                  'bg-yellow-100 text-yellow-800': debate.status === 'pending',
+                                                  'bg-blue-100 text-blue-800': debate.status === 'in_progress',
+                                                  'bg-green-100 text-green-800': debate.status === 'completed',
+                                                  'bg-red-100 text-red-800': debate.status === 'error'
+                                              }"
+                                              x-text="statusText(debate.status)"></span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm">
+                                        <span x-show="debate.winner" class="px-2 py-1 text-xs rounded-full"
+                                              :class="{
+                                                  'bg-blue-100 text-blue-800': debate.winner === 'pro',
+                                                  'bg-red-100 text-red-800': debate.winner === 'con',
+                                                  'bg-gray-100 text-gray-800': debate.winner === 'draw'
+                                              }"
+                                              x-text="winnerText(debate.winner)"></span>
+                                        <span x-show="!debate.winner" class="text-gray-400">-</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-500" x-text="formatDate(debate.created_at)"></td>
+                                    <td class="px-6 py-4 text-sm">
+                                        <button @click="viewDebate(debate.id)" class="text-blue-600 hover:text-blue-900 mr-2">查看</button>
+                                        <button @click="watchLive(debate.id)" x-show="debate.status === 'in_progress'" class="text-red-600 hover:text-red-900 mr-2">观看</button>
+                                        <button @click="deleteDebate(debate.id)" class="text-red-600 hover:text-red-900">删除</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="debates.length === 0">
+                                <td colspan="8" class="px-6 py-8 text-center text-gray-500">暂无辩论记录</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Topics Tab -->
+            <div x-show="currentTab === 'topics'" x-cloak>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">辩题管理</h2>
+                    <button @click="showNewTopicModal = true" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        + 新建辩题
+                    </button>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <template x-for="topic in topics" :key="topic.id">
+                        <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+                            <h3 class="font-semibold text-lg text-gray-900" x-text="topic.title"></h3>
+                            <p class="text-gray-600 text-sm mt-2" x-text="topic.description || '无描述'"></p>
+                            <div class="mt-2 text-xs text-gray-500">
+                                <span x-text="'轮次：' + (getRoundCount(topic.round_config) || '默认 4 轮')"></span>
+                            </div>
+                            <div class="mt-4 flex justify-between items-center">
+                                <span class="text-xs text-gray-500" x-text="'辩论数：' + (topic.debate_count || 0)"></span>
+                                <div>
+                                    <button @click="editTopic(topic)" class="text-blue-600 hover:text-blue-900 text-sm mr-2">编辑</button>
+                                    <button @click="selectTopic(topic.id)" class="text-green-600 hover:text-green-900 text-sm mr-2">使用</button>
+                                    <button @click="deleteTopic(topic.id)" class="text-red-600 hover:text-red-900 text-sm">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Configs Tab -->
+            <div x-show="currentTab === 'configs'" x-cloak>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">LLM 配置</h2>
+                    <button @click="showNewConfigModal = true" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        + 新建配置
+                    </button>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <template x-for="config in configs" :key="config.id">
+                        <div class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+                            <div class="flex justify-between items-start">
+                                <h3 class="font-semibold text-lg text-gray-900" x-text="config.name"></h3>
+                                <span class="px-2 py-1 text-xs rounded"
+                                      :class="config.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                                      x-text="config.is_active ? '启用' : '禁用'"></span>
+                            </div>
+                            <div class="mt-2 text-sm text-gray-600">
+                                <p><span class="font-medium">模型:</span> <span x-text="config.model_name"></span></p>
+                                <p class="truncate"><span class="font-medium">地址:</span> <span x-text="config.base_url"></span></p>
+                                <p><span class="font-medium">温度:</span> <span x-text="config.temperature"></span></p>
+                                <p><span class="font-medium">Max Tokens:</span> <span x-text="config.max_tokens"></span></p>
+                            </div>
+                            <div class="mt-4 flex justify-end">
+                                <button @click="editConfig(config)" class="text-blue-600 hover:text-blue-900 text-sm mr-2">编辑</button>
+                                <button @click="deleteConfig(config.id)" class="text-red-600 hover:text-red-900 text-sm">删除</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- New Debate Tab -->
+            <div x-show="currentTab === 'new'" x-cloak>
+                <h2 class="text-xl font-semibold mb-4">开始新辩论</h2>
+                <div class="bg-white rounded-lg shadow p-6 max-w-2xl">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">选择辩题</label>
+                            <select x-model="newDebate.topic_id" class="w-full border rounded-md px-3 py-2">
+                                <option value="">请选择辩题</option>
+                                <template x-for="topic in topics" :key="topic.id">
+                                    <option :value="topic.id" x-text="topic.title"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">正方 LLM 配置</label>
+                            <select x-model="newDebate.pro_config_id" class="w-full border rounded-md px-3 py-2">
+                                <option value="">请选择配置</option>
+                                <template x-for="config in activeConfigs" :key="config.id">
+                                    <option :value="config.id" x-text="config.name + ' (' + config.model_name + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">反方 LLM 配置</label>
+                            <select x-model="newDebate.con_config_id" class="w-full border rounded-md px-3 py-2">
+                                <option value="">请选择配置</option>
+                                <template x-for="config in activeConfigs" :key="config.id">
+                                    <option :value="config.id" x-text="config.name + ' (' + config.model_name + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <button @click="startDebate()"
+                                class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium mt-4">
+                            开始辩论
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Live Debate View (Full Screen) -->
+        <div x-show="currentTab === 'live'" x-cloak class="fixed inset-0 bg-gray-50 z-40 flex flex-col">
+            <!-- Header (fixed) -->
+            <div class="bg-white shadow border-b flex-shrink-0">
+                <div class="container mx-auto px-4 py-3">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-4">
+                            <h1 class="text-xl font-bold" x-text="selectedDebate?.topic?.title || '辩论直播'"></h1>
+                            <span class="px-3 py-1 text-sm rounded-full bg-red-100 text-red-800 flex items-center" x-show="isLive">
+                                <span class="w-2 h-2 bg-red-600 rounded-full mr-2 animate-pulse"></span>
+                                直播中
+                            </span>
+                            <span class="px-3 py-1 text-sm rounded-full"
+                                  :class="{
+                                      'bg-yellow-100 text-yellow-800': selectedDebate?.status === 'pending',
+                                      'bg-blue-100 text-blue-800': selectedDebate?.status === 'in_progress',
+                                      'bg-green-100 text-green-800': selectedDebate?.status === 'completed',
+                                      'bg-red-100 text-red-800': selectedDebate?.status === 'error'
+                                  }"
+                                  x-text="statusText(selectedDebate?.status)"></span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button x-show="isLive" @click="abortDebate()" class="px-4 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50">终止辩论</button>
+                            <button @click="exitLiveView()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">返回</button>
+                        </div>
+                    </div>
+                    <!-- Debate Info -->
+                    <div class="flex items-center justify-center space-x-8 py-2 text-sm">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-blue-600 font-bold">正方</span>
+                            <span x-text="selectedDebate?.pro_config?.name || '-'"></span>
+                            <span class="text-gray-400">vs</span>
+                            <span class="text-red-600 font-bold">反方</span>
+                            <span x-text="selectedDebate?.con_config?.name || '-'"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages Container (scrollable) -->
+            <div class="flex-1 overflow-y-auto" x-ref="messagesContainer">
+                <div class="container mx-auto px-4 py-6" style="max-width: 1000px;">
+                    <div class="space-y-4">
+                        <!-- History Messages -->
+                        <template x-for="msg in selectedDebate?.messages" :key="msg.id">
+                            <div class="p-6 rounded-lg fade-in shadow-sm"
+                                 :class="msg.side === 'pro' ? 'message-pro' : 'message-con'">
+                                <div class="flex justify-between items-center mb-3">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-bold text-lg"
+                                              :class="msg.side === 'pro' ? 'text-blue-700' : 'text-red-700'"
+                                              x-text="msg.side === 'pro' ? '正方' : '反方'"></span>
+                                        <span class="px-3 py-1 text-sm rounded-full bg-white bg-opacity-70 font-medium" x-text="msg.phase"></span>
+                                    </div>
+                                    <span class="text-sm text-gray-600 font-medium" x-text="'第' + msg.round + '轮'"></span>
+                                </div>
+                                <p class="text-gray-800 text-lg leading-relaxed message-content" x-text="msg.content"></p>
+                            </div>
+                        </template>
+                        <!-- Live Messages -->
+                        <div x-show="isLive && liveMessages.length > 0" class="space-y-4">
+                            <template x-for="msg in liveMessages" :key="msg.id">
+                                <div class="p-6 rounded-lg fade-in shadow-sm"
+                                     :class="msg.side === 'pro' ? 'message-pro' : 'message-con'">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <div class="flex items-center space-x-2">
+                                            <span class="font-bold text-lg"
+                                                  :class="msg.side === 'pro' ? 'text-blue-700' : 'text-red-700'"
+                                                  x-text="msg.side === 'pro' ? '正方' : '反方'"></span>
+                                            <span class="px-3 py-1 text-sm rounded-full bg-white bg-opacity-70 font-medium" x-text="msg.phase"></span>
+                                        </div>
+                                        <span class="text-sm text-gray-600 font-medium" x-text="'第' + msg.round + '轮'"></span>
+                                    </div>
+                                    <p class="text-gray-800 text-lg leading-relaxed message-content" x-text="msg.content"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Live Status -->
+                    <div x-show="isLive" class="mt-8 pb-8 text-center">
+                        <div class="inline-flex items-center justify-center bg-red-600 text-white rounded-full shadow-xl px-8 py-4">
+                            <span class="w-4 h-4 bg-white rounded-full animate-pulse mr-3"></span>
+                            <span class="text-white font-bold text-lg">正在直播辩论...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debate Detail Modal (for history view) -->
+        <div x-show="showDebateModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="px-6 py-4 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold" x-text="selectedDebate?.topic?.title || '辩论详情'"></h3>
+                    <button @click="closeDebateModal()" class="text-gray-500 hover:text-gray-700">&times;</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Debate Info -->
+                    <div class="flex justify-between items-center mb-4 pb-4 border-b">
+                        <div>
+                            <span class="text-sm text-gray-500">正方：</span>
+                            <span class="font-medium" x-text="selectedDebate?.pro_config?.name"></span>
+                        </div>
+                        <div>
+                            <span class="px-2 py-1 text-xs rounded"
+                                  :class="{
+                                      'bg-yellow-100 text-yellow-800': selectedDebate?.status === 'pending',
+                                      'bg-blue-100 text-blue-800': selectedDebate?.status === 'in_progress',
+                                      'bg-green-100 text-green-800': selectedDebate?.status === 'completed',
+                                      'bg-red-100 text-red-800': selectedDebate?.status === 'error'
+                                  }"
+                                  x-text="statusText(selectedDebate?.status)"></span>
+                        </div>
+                        <div>
+                            <span class="text-sm text-gray-500">反方：</span>
+                            <span class="font-medium" x-text="selectedDebate?.con_config?.name"></span>
+                        </div>
+                    </div>
+
+                    <!-- Messages -->
+                    <div class="space-y-3">
+                        <template x-for="msg in selectedDebate?.messages" :key="msg.id">
+                            <div class="p-4 rounded fade-in"
+                                 :class="msg.side === 'pro' ? 'message-pro' : 'message-con'">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-bold text-sm"
+                                          :class="msg.side === 'pro' ? 'text-blue-700' : 'text-red-700'"
+                                          x-text="msg.side === 'pro' ? '正方' : '反方'"></span>
+                                    <span class="text-xs text-gray-500" x-text="'第' + msg.round + '轮 · ' + msg.phase"></span>
+                                </div>
+                                <p class="text-gray-800 text-sm whitespace-pre-wrap" x-text="msg.content"></p>
+                            </div>
+                        </template>
+                        <div x-show="isLive && liveMessages.length > 0" class="space-y-3">
+                            <template x-for="msg in liveMessages" :key="msg.id">
+                                <div class="p-4 rounded fade-in"
+                                     :class="msg.side === 'pro' ? 'message-pro' : 'message-con'">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="font-bold text-sm"
+                                              :class="msg.side === 'pro' ? 'text-blue-700' : 'text-red-700'"
+                                              x-text="msg.side === 'pro' ? '正方' : '反方'"></span>
+                                        <span class="text-xs text-gray-500" x-text="'第' + msg.round + '轮 · ' + msg.phase"></span>
+                                    </div>
+                                    <p class="text-gray-800 text-sm whitespace-pre-wrap" x-text="msg.content"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Live indicator -->
+                    <div x-show="isLive" class="mt-4 text-center">
+                        <span class="inline-flex items-center text-red-600">
+                            <span class="w-2 h-2 bg-red-600 rounded-full mr-2 animate-pulse"></span>
+                            直播中...
+                        </span>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t bg-gray-50 flex justify-between">
+                    <button x-show="isLive" @click="abortDebate()" class="text-red-600 hover:text-red-800">终止辩论</button>
+                    <button @click="closeDebateModal()" class="ml-auto bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">关闭</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Topic Modal -->
+        <div x-show="showNewTopicModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+                <h3 class="text-lg font-semibold mb-4" x-text="editingTopic ? '编辑辩题' : '新建辩题'"></h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">辩题标题</label>
+                        <input type="text" x-model="newTopic.title" class="w-full border rounded-md px-3 py-2" placeholder="例如：AI 是否会导致大规模失业？">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">辩题描述（可选）</label>
+                        <textarea x-model="newTopic.description" class="w-full border rounded-md px-3 py-2" rows="3" placeholder="简要说明辩题背景..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">辩论轮次配置</label>
+                        <div class="border rounded-md p-3 bg-gray-50">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs text-gray-500">自定义每个阶段的轮数</span>
+                                <button @click="addPhase()" class="text-xs text-blue-600 hover:text-blue-800">+ 添加阶段</button>
+                            </div>
+                            <template x-for="(phase, index) in newTopicRoundPhases" :key="index">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <input type="text" x-model="phase.name" class="flex-1 border rounded px-2 py-1 text-sm" placeholder="阶段名称（如：立论）">
+                                    <input type="number" x-model.number="phase.rounds" class="w-20 border rounded px-2 py-1 text-sm" placeholder="轮数" min="1">
+                                    <input type="text" x-model="phase.description" class="flex-1 border rounded px-2 py-1 text-sm" placeholder="描述">
+                                    <button @click="removePhase(index)" class="text-red-600 hover:text-red-800 text-sm">×</button>
+                                </div>
+                            </template>
+                            <div class="mt-2 flex space-x-2">
+                                <button @click="resetToDefaultPhases()" class="text-xs text-gray-600 hover:text-gray-800">恢复默认</button>
+                                <span class="text-xs text-gray-500" x-text="'总轮数：' + getTotalRounds()"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">辩论任务配置（可选）</label>
+                        <div class="border rounded-md p-3 bg-gray-50">
+                            <p class="text-xs text-gray-500 mb-2">自定义辩论任务参数，不配置则使用默认值</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">正方系统提示词</label>
+                                    <textarea x-model="newTopicTaskConfig.pro_system_prompt" class="w-full border rounded px-2 py-1 text-sm" rows="3" placeholder="不配置则使用默认正方提示词"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">反方系统提示词</label>
+                                    <textarea x-model="newTopicTaskConfig.con_system_prompt" class="w-full border rounded px-2 py-1 text-sm" rows="3" placeholder="不配置则使用默认反方提示词"></textarea>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">每轮最大字数</label>
+                                        <input type="number" x-model.number="newTopicTaskConfig.max_words_per_round" class="w-full border rounded px-2 py-1 text-sm" placeholder="默认：300">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-1">温度参数</label>
+                                        <input type="number" step="0.1" x-model.number="newTopicTaskConfig.temperature" class="w-full border rounded px-2 py-1 text-sm" placeholder="默认：0.7">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button @click="resetToDefaultTaskConfig()" class="text-xs text-gray-600 hover:text-gray-800">清空配置</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 mt-6">
+                    <button @click="showNewTopicModal = false; editingTopic = null" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                    <button @click="saveTopic()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Config Modal -->
+        <div x-show="showNewConfigModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                <h3 class="text-lg font-semibold mb-4" x-text="editingConfig ? '编辑 LLM 配置' : '新建 LLM 配置'"></h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">配置名称</label>
+                        <input type="text" x-model="newConfig.name" class="w-full border rounded-md px-3 py-2" placeholder="例如：GPT-4">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Base URL</label>
+                        <input type="text" x-model="newConfig.base_url" class="w-full border rounded-md px-3 py-2" placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                        <input type="password" x-model="newConfig.api_key" class="w-full border rounded-md px-3 py-2" placeholder="sk-...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">模型名称</label>
+                        <input type="text" x-model="newConfig.model_name" class="w-full border rounded-md px-3 py-2" placeholder="gpt-4">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">温度</label>
+                            <input type="number" x-model.number="newConfig.temperature" step="0.1" min="0" max="2" class="w-full border rounded-md px-3 py-2" value="0.7">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
+                            <input type="number" x-model.number="newConfig.max_tokens" class="w-full border rounded-md px-3 py-2" value="1000">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 mt-6">
+                    <button @click="showNewConfigModal = false; editingConfig = null" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                    <button @click="saveConfig()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        function debateApp() {
+            return {
+                currentTab: 'debates',
+                debates: [],
+                topics: [],
+                configs: [],
+                activeConfigs: [],
+                showDebateModal: false,
+                showNewTopicModal: false,
+                showNewConfigModal: false,
+                selectedDebate: null,
+                editingTopic: null,
+                editingConfig: null,
+                isLive: false,
+                isLiveView: false,
+                liveMessages: [],
+                ws: null,
+                autoScrollEnabled: true,
+                messagesContainer: null,
+                newDebate: {
+                    topic_id: '',
+                    pro_config_id: '',
+                    con_config_id: ''
+                },
+                newTopic: {
+                    title: '',
+                    description: '',
+                    round_config: ''
+                },
+                newTopicRoundPhases: [],
+                newTopicTaskConfig: {
+                    pro_system_prompt: '',
+                    con_system_prompt: '',
+                    max_words_per_round: null,
+                    temperature: null
+                },
+                newConfig: {
+                    name: '',
+                    base_url: 'https://api.openai.com/v1',
+                    api_key: '',
+                    model_name: '',
+                    temperature: 0.7,
+                    max_tokens: 1000
+                },
+
+                async init() {
+                    await this.loadDebates();
+                    await this.loadTopics();
+                    await this.loadConfigs();
+                    this.resetTopicForm();
+                },
+
+                async loadDebates() {
+                    try {
+                        const res = await fetch(`${API_BASE}/debates`);
+                        this.debates = await res.json();
+                    } catch (e) {
+                        console.error('Failed to load debates:', e);
+                    }
+                },
+
+                async loadTopics() {
+                    try {
+                        const res = await fetch(`${API_BASE}/topics`);
+                        this.topics = await res.json();
+                    } catch (e) {
+                        console.error('Failed to load topics:', e);
+                    }
+                },
+
+                async loadConfigs() {
+                    try {
+                        const res = await fetch(`${API_BASE}/llm-configs`);
+                        this.configs = await res.json();
+                        this.activeConfigs = this.configs.filter(c => c.is_active);
+                    } catch (e) {
+                        console.error('Failed to load configs:', e);
+                    }
+                },
+
+                async startDebate() {
+                    if (!this.newDebate.topic_id || !this.newDebate.pro_config_id || !this.newDebate.con_config_id) {
+                        alert('请填写所有必填项');
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch(`${API_BASE}/debates/start`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.newDebate)
+                        });
+
+                        if (!res.ok) {
+                            const error = await res.json();
+                            throw new Error(error.detail || 'Failed to start debate');
+                        }
+
+                        const debate = await res.json();
+                        console.log('Debate started:', debate.id);
+
+                        // 关闭之前的连接（如果有）
+                        if (this.ws) {
+                            this.ws.close();
+                            this.ws = null;
+                        }
+
+                        this.currentTab = 'live';
+                        this.isLiveView = true;
+                        this.isLive = false;
+                        this.selectedDebate = debate;
+                        this.liveMessages = [];
+                        this.newDebate = { topic_id: '', pro_config_id: '', con_config_id: '' };
+                        await this.loadDebates();
+
+                        // 延迟连接 WebSocket，确保模态框已打开
+                        setTimeout(() => {
+                            this.connectWebSocket(debate.id);
+                        }, 100);
+
+                        // 滚动到底部
+                        this.$nextTick(() => {
+                            this.scrollToBottom();
+                        });
+                    } catch (e) {
+                        alert('启动辩论失败：' + e.message);
+                    }
+                },
+
+                exitLiveView() {
+                    if (this.ws) {
+                        this.ws.close();
+                        this.ws = null;
+                    }
+                    this.isLive = false;
+                    this.isLiveView = false;
+                    this.currentTab = 'debates';
+                    this.selectedDebate = null;
+                    this.liveMessages = [];
+                    this.loadDebates();
+                },
+
+                connectWebSocket(debateId) {
+                    // 关闭现有连接
+                    if (this.ws) {
+                        this.ws.close();
+                        this.ws = null;
+                    }
+
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/api/debates/${debateId}/stream`;
+                    console.log('Connecting to WebSocket:', wsUrl);
+
+                    this.ws = new WebSocket(wsUrl);
+
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.isLive = true;
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            console.log('Received WebSocket message:', data);
+                            this.handleStreamEvent(data);
+                        } catch (e) {
+                            console.error('Failed to parse WebSocket message:', e, event.data);
+                        }
+                    };
+
+                    this.ws.onclose = () => {
+                        console.log('WebSocket closed');
+                        this.isLive = false;
+                        this.loadDebates();
+                    };
+
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.isLive = false;
+                    };
+                },
+
+                handleStreamEvent(event) {
+                    console.log('Stream event:', event);
+
+                    // 检查是否收到错误（如辩论被删除）
+                    if (event.event_type === 'error') {
+                        this.isLive = false;
+                        alert('辩论错误：' + event.data.error);
+                        return;
+                    }
+
+                    switch (event.event_type) {
+                        case 'connected':
+                            this.isLive = true;
+                            console.log('WebSocket connected, debate is live');
+                            break;
+                        case 'start':
+                            console.log('Debate started:', event.data.topic);
+                            this.isLive = true;
+                            break;
+                        case 'phase_start':
+                            console.log('Phase started:', event.data.phase);
+                            break;
+                        case 'message':
+                            // 检查消息是否已存在（通过 round 和 side 判断）
+                            const exists = this.liveMessages.some(m =>
+                                m.round === event.data.round && m.side === event.data.side
+                            );
+                            if (!exists) {
+                                this.liveMessages.push({
+                                    id: Date.now(),
+                                    ...event.data
+                                });
+                                console.log('New message received:', event.data.side, event.data.round);
+                                // 自动滚动到底部
+                                this.$nextTick(() => {
+                                    this.scrollToBottom();
+                                });
+                            }
+                            // 确保 isLive 为 true
+                            this.isLive = true;
+                            break;
+                        case 'complete':
+                            this.isLive = false;
+                            console.log('Debate completed');
+                            // 刷新辩论详情以获取完整消息列表
+                            if (this.selectedDebate) {
+                                this.loadDebateDetail(this.selectedDebate.id);
+                            }
+                            this.loadDebates();
+                            break;
+                    }
+                },
+
+                async abortDebate() {
+                    if (!this.selectedDebate) return;
+                    try {
+                        await fetch(`${API_BASE}/debates/${this.selectedDebate.id}/abort`, { method: 'POST' });
+                        this.isLive = false;
+                        if (this.ws) this.ws.close();
+                        await this.loadDebateDetail(this.selectedDebate.id);
+                        await this.loadDebates();
+                    } catch (e) {
+                        console.error('Failed to abort debate:', e);
+                    }
+                },
+
+                async viewDebate(debateId) {
+                    await this.loadDebateDetail(debateId);
+                    this.showDebateModal = true;
+                },
+
+                async watchLive(debateId) {
+                    // 打开全屏直播视图
+                    // 首先清空所有旧数据
+                    if (this.ws) {
+                        this.ws.close();
+                        this.ws = null;
+                    }
+                    this.isLive = false;
+                    this.selectedDebate = null;
+                    this.liveMessages = [];
+
+                    try {
+                        const res = await fetch(`${API_BASE}/debates/${debateId}`);
+                        if (!res.ok) {
+                            if (res.status === 404) {
+                                alert('辩论记录已被删除');
+                                this.isLiveView = false;
+                                this.currentTab = 'debates';
+                                await this.loadDebates();
+                                return;
+                            }
+                            throw new Error('Failed to load debate');
+                        }
+                        this.selectedDebate = await res.json();
+                        this.currentTab = 'live';
+                        this.isLiveView = true;
+
+                        // 连接 WebSocket
+                        setTimeout(() => {
+                            this.connectWebSocket(debateId);
+                        }, 100);
+                    } catch (e) {
+                        console.error('Failed to load debate detail:', e);
+                        alert('加载辩论失败：' + e.message);
+                    }
+                },
+
+                async loadDebateDetail(debateId) {
+                    try {
+                        const res = await fetch(`${API_BASE}/debates/${debateId}`);
+                        if (!res.ok) {
+                            if (res.status === 404) {
+                                alert('辩论记录已被删除');
+                                this.showDebateModal = false;
+                                this.selectedDebate = null;
+                                this.liveMessages = [];
+                                await this.loadDebates();
+                                return;
+                            }
+                            throw new Error('Failed to load debate');
+                        }
+                        const debate = await res.json();
+
+                        this.selectedDebate = debate;
+
+                        // 滚动到底部
+                        this.$nextTick(() => {
+                            this.scrollToBottom();
+                        });
+
+                        // 检查是否需要连接 WebSocket
+                        const shouldConnect = this.selectedDebate.status === 'in_progress' && !this.isLive && !this.ws;
+
+                        // 如果 WebSocket 未连接，清空 liveMessages
+                        if (!this.isLive && !this.ws) {
+                            this.liveMessages = [];
+                        }
+
+                        if (shouldConnect) {
+                            console.log('Debate is in progress, connecting WebSocket...');
+                            this.connectWebSocket(debateId);
+                        }
+                    } catch (e) {
+                        console.error('Failed to load debate detail:', e);
+                        alert('加载辩论失败：' + e.message);
+                    }
+                },
+
+                closeDebateModal() {
+                    if (this.ws) {
+                        this.ws.close();
+                        this.ws = null;
+                    }
+                    this.isLive = false;
+                    this.showDebateModal = false;
+                    this.selectedDebate = null;
+                    this.liveMessages = [];
+                },
+
+                async deleteDebate(debateId) {
+                    if (!confirm('确定要删除这条辩论记录吗？')) return;
+                    try {
+                        await fetch(`${API_BASE}/debates/${debateId}`, { method: 'DELETE' });
+
+                        // 如果正在查看或直播这个辩论，关闭它
+                        if (this.selectedDebate && this.selectedDebate.id === debateId) {
+                            if (this.ws) {
+                                this.ws.close();
+                                this.ws = null;
+                            }
+                            this.isLive = false;
+                            this.isLiveView = false;
+                            this.selectedDebate = null;
+                            this.liveMessages = [];
+                            this.currentTab = 'debates';
+                        }
+
+                        // 如果在直播列表中看到这个辩论，也关闭它
+                        if (this.isLiveView) {
+                            if (this.ws) {
+                                this.ws.close();
+                                this.ws = null;
+                            }
+                            this.isLive = false;
+                            this.isLiveView = false;
+                            this.selectedDebate = null;
+                            this.liveMessages = [];
+                            this.currentTab = 'debates';
+                        }
+
+                        await this.loadDebates();
+                    } catch (e) {
+                        alert('删除失败：' + e.message);
+                    }
+                },
+
+                scrollToBottom() {
+                    // 获取消息容器
+                    if (this.$refs.messagesContainer) {
+                        this.$refs.messagesContainer.scrollTop = this.$refs.messagesContainer.scrollHeight;
+                    }
+                },
+
+                async createTopic() {
+                    if (!this.newTopic.title) {
+                        alert('请填写辩题标题');
+                        return;
+                    }
+                    try {
+                        await fetch(`${API_BASE}/topics`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.newTopic)
+                        });
+                        this.showNewTopicModal = false;
+                        this.newTopic = { title: '', description: '', round_config: '', task_config: null };
+                        this.newTopicTaskConfig = {
+                            pro_system_prompt: '',
+                            con_system_prompt: '',
+                            max_words_per_round: null,
+                            temperature: null
+                        };
+                        await this.loadTopics();
+                    } catch (e) {
+                        alert('创建失败：' + e.message);
+                    }
+                },
+
+                editTopic(topic) {
+                    this.editingTopic = topic;
+                    this.newTopic = { ...topic };
+                    if (topic.round_config) {
+                        try {
+                            this.newTopicRoundPhases = JSON.parse(topic.round_config);
+                        } catch (e) {
+                            this.newTopicRoundPhases = this.getDefaultPhases();
+                        }
+                    } else {
+                        this.newTopicRoundPhases = this.getDefaultPhases();
+                    }
+                    // Load task config
+                    if (topic.task_config) {
+                        try {
+                            this.newTopicTaskConfig = JSON.parse(topic.task_config);
+                        } catch (e) {
+                            this.newTopicTaskConfig = {
+                                pro_system_prompt: '',
+                                con_system_prompt: '',
+                                max_words_per_round: null,
+                                temperature: null
+                            };
+                        }
+                    } else {
+                        this.newTopicTaskConfig = {
+                            pro_system_prompt: '',
+                            con_system_prompt: '',
+                            max_words_per_round: null,
+                            temperature: null
+                        };
+                    }
+                    this.showNewTopicModal = true;
+                },
+
+                saveTopic() {
+                    if (!this.newTopic.title) {
+                        alert('请填写辩题标题');
+                        return;
+                    }
+                    // Serialize round config
+                    this.newTopic.round_config = JSON.stringify(this.newTopicRoundPhases);
+                    // Serialize task config (only if any field is filled)
+                    const hasTaskConfig = Object.values(this.newTopicTaskConfig).some(v => v !== null && v !== '');
+                    if (hasTaskConfig) {
+                        this.newTopic.task_config = JSON.stringify(this.newTopicTaskConfig);
+                    } else {
+                        this.newTopic.task_config = null;
+                    }
+
+                    if (this.editingTopic) {
+                        this.updateTopic();
+                    } else {
+                        this.createTopic();
+                    }
+                },
+
+                async updateTopic() {
+                    if (!this.newTopic.title) {
+                        alert('请填写辩题标题');
+                        return;
+                    }
+                    try {
+                        await fetch(`${API_BASE}/topics/${this.editingTopic.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.newTopic)
+                        });
+                        this.showNewTopicModal = false;
+                        this.editingTopic = null;
+                        this.newTopic = { title: '', description: '', round_config: '', task_config: null };
+                        this.newTopicTaskConfig = {
+                            pro_system_prompt: '',
+                            con_system_prompt: '',
+                            max_words_per_round: null,
+                            temperature: null
+                        };
+                        await this.loadTopics();
+                    } catch (e) {
+                        alert('更新失败：' + e.message);
+                    }
+                },
+
+                selectTopic(topicId) {
+                    this.newDebate.topic_id = topicId;
+                    this.currentTab = 'new';
+                },
+
+                getDefaultPhases() {
+                    return [
+                        { name: '立论', rounds: 1, description: '开篇立论，阐述己方观点' },
+                        { name: '驳论', rounds: 1, description: '反驳对方观点，指出对方漏洞' },
+                        { name: '自由辩论', rounds: 2, description: '自由交锋，深入辩论' },
+                        { name: '总结', rounds: 1, description: '总结陈词，强调己方优势' }
+                    ];
+                },
+
+                resetTopicForm() {
+                    this.newTopic = { title: '', description: '', round_config: '', task_config: null };
+                    this.newTopicRoundPhases = this.getDefaultPhases();
+                    this.newTopicTaskConfig = {
+                        pro_system_prompt: '',
+                        con_system_prompt: '',
+                        max_words_per_round: null,
+                        temperature: null
+                    };
+                },
+
+                resetToDefaultTaskConfig() {
+                    this.newTopicTaskConfig = {
+                        pro_system_prompt: '',
+                        con_system_prompt: '',
+                        max_words_per_round: null,
+                        temperature: null
+                    };
+                },
+
+                addPhase() {
+                    this.newTopicRoundPhases.push({ name: '', rounds: 1, description: '' });
+                },
+
+                removePhase(index) {
+                    this.newTopicRoundPhases.splice(index, 1);
+                },
+
+                resetToDefaultPhases() {
+                    this.newTopicRoundPhases = this.getDefaultPhases();
+                },
+
+                getTotalRounds() {
+                    return this.newTopicRoundPhases.reduce((sum, phase) => sum + (phase.rounds || 0), 0);
+                },
+
+                getRoundCount(roundConfig) {
+                    if (!roundConfig) return null;
+                    try {
+                        const phases = JSON.parse(roundConfig);
+                        if (Array.isArray(phases)) {
+                            return phases.reduce((sum, phase) => sum + (phase.rounds || 0), 0);
+                        }
+                    } catch (e) {
+                        return null;
+                    }
+                    return null;
+                },
+
+                async deleteTopic(topicId) {
+                    if (!confirm('确定要删除这个辩题吗？')) return;
+                    try {
+                        await fetch(`${API_BASE}/topics/${topicId}`, { method: 'DELETE' });
+                        await this.loadTopics();
+                    } catch (e) {
+                        alert('删除失败：' + e.message);
+                    }
+                },
+
+                async createConfig() {
+                    this.editingConfig = null;
+                    this.newConfig = {
+                        name: '',
+                        base_url: 'https://api.openai.com/v1',
+                        api_key: '',
+                        model_name: '',
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    };
+                    this.showNewConfigModal = true;
+                },
+
+                editConfig(config) {
+                    this.editingConfig = config;
+                    this.newConfig = { ...config };
+                    this.showNewConfigModal = true;
+                },
+
+                async saveConfig() {
+                    if (!this.newConfig.name || !this.newConfig.api_key || !this.newConfig.model_name) {
+                        alert('请填写必填项');
+                        return;
+                    }
+                    try {
+                        if (this.editingConfig) {
+                            await fetch(`${API_BASE}/llm-configs/${this.editingConfig.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.newConfig)
+                            });
+                        } else {
+                            await fetch(`${API_BASE}/llm-configs`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(this.newConfig)
+                            });
+                        }
+                        this.showNewConfigModal = false;
+                        this.editingConfig = null;
+                        this.newConfig = {
+                            name: '',
+                            base_url: 'https://api.openai.com/v1',
+                            api_key: '',
+                            model_name: '',
+                            temperature: 0.7,
+                            max_tokens: 1000
+                        };
+                        await this.loadConfigs();
+                    } catch (e) {
+                        alert('保存失败：' + e.message);
+                    }
+                },
+
+                async deleteConfig(configId) {
+                    if (!confirm('确定要删除这个配置吗？')) return;
+                    try {
+                        await fetch(`${API_BASE}/llm-configs/${configId}`, { method: 'DELETE' });
+                        await this.loadConfigs();
+                    } catch (e) {
+                        alert('删除失败：' + e.message);
+                    }
+                },
+
+                statusText(status) {
+                    const texts = {
+                        'pending': '待开始',
+                        'in_progress': '进行中',
+                        'completed': '已完成',
+                        'error': '错误'
+                    };
+                    return texts[status] || status;
+                },
+
+                winnerText(winner) {
+                    if (!winner) return '-';
+                    const texts = {
+                        'pro': '正方胜',
+                        'con': '反方胜',
+                        'draw': '平局'
+                    };
+                    return texts[winner] || winner;
+                },
+
+                formatDate(dateStr) {
+                    const date = new Date(dateStr);
+                    return date.toLocaleString('zh-CN');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
