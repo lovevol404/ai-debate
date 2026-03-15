@@ -132,3 +132,4 @@ Thumbs.db
 # Project specific
 *.db
 debates.db
+.claude/*.local.json
